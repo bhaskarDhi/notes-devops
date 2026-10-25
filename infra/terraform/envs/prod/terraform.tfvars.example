@@ -1,0 +1,2 @@
+admin_cidr  = "YOUR.IP.ADDRESS/32"
+alert_email = "you@example.com"
