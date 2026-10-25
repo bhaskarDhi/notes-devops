@@ -1,0 +1,6 @@
+- name: Check that every server answers
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Ping
+      ansible.builtin.ping:

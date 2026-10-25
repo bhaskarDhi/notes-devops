@@ -1,0 +1,9 @@
+ansible_user: ubuntu
+
+use_bastion: true
+bastion_ip: "{{ hostvars[groups['jenkins'][0]]['public_ip_address'] }}"
+ansible_ssh_common_args: >-
+  -o StrictHostKeyChecking=accept-new
+  {% if use_bastion | bool %}-o ProxyCommand="ssh -W %h:%p -q -o StrictHostKeyChecking=accept-new ubuntu@{{ bastion_ip }}"{% endif %}
+
+sslip_domain: "{{ public_ip_address | replace('.', '-') }}.sslip.io"

@@ -1,0 +1,2 @@
+caddy_site: ""
+caddy_upstream: "127.0.0.1:3000"

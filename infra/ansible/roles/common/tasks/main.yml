@@ -1,0 +1,51 @@
+- name: Update apt cache and upgrade packages
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: safe
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Enable automatic security updates
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create swap file
+  ansible.builtin.command:
+    cmd: "fallocate -l {{ common_swap_size_mb }}M {{ common_swap_file }}"
+    creates: "{{ common_swap_file }}"
+  when: common_swap_size_mb | int > 0
+  notify: Enable swap
+
+- name: Protect swap file
+  ansible.builtin.file:
+    path: "{{ common_swap_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: common_swap_size_mb | int > 0
+
+- name: Enable swap at boot
+  ansible.posix.mount:
+    src: "{{ common_swap_file }}"
+    path: none
+    fstype: swap
+    opts: sw
+    state: present
+  when: common_swap_size_mb | int > 0
+
+- name: Use swap only when RAM is almost full
+  ansible.posix.sysctl:
+    name: vm.swappiness
+    value: "10"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-swap.conf
