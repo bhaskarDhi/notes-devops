@@ -1,0 +1,10 @@
+notes_app_image_tag: "{{ image_tag | default('') }}"
+
+notes_app_dir: /opt/notes
+notes_app_ssm_prefix: /notes-devops/prod
+notes_app_aws_region: ap-south-1
+notes_app_rds_ca_url: https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+notes_app_public_url: "https://{{ caddy_site }}"
+
+notes_app_ready_retries: 20
+notes_app_ready_delay: 3

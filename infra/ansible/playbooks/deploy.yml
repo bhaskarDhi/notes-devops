@@ -1,0 +1,6 @@
+- name: Deploy the Notes app
+  hosts: app
+  become: true
+  roles:
+    - ecr_login
+    - notes_app

@@ -1,0 +1,26 @@
+- name: Install the Amazon ECR credential helper
+  ansible.builtin.apt:
+    name: amazon-ecr-credential-helper
+    state: present
+
+- name: Create the Docker config folder
+  ansible.builtin.file:
+    path: "{{ item.home }}/.docker"
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0700"
+  loop: "{{ ecr_login_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Let Docker log in to ECR with the server's IAM role
+  ansible.builtin.copy:
+    dest: "{{ item.home }}/.docker/config.json"
+    content: "{{ {'credHelpers': {ecr_login_registry: 'ecr-login'}} | to_nice_json }}\n"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0600"
+  loop: "{{ ecr_login_users }}"
+  loop_control:
+    label: "{{ item.name }}"

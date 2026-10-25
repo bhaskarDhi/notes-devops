@@ -1,0 +1,95 @@
+# Tools the pipeline uses on the Jenkins server
+
+- name: Install packages for the tools
+  ansible.builtin.apt:
+    name:
+      - unzip
+      - python3-venv
+    state: present
+
+# ---------- AWS CLI v2 (push the deployed tag to SSM) ----------
+
+- name: Check if the AWS CLI is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/aws
+  register: jenkins_awscli
+
+- name: Download the AWS CLI v2
+  ansible.builtin.get_url:
+    url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+    dest: /tmp/awscliv2.zip
+    mode: "0644"
+  when: not jenkins_awscli.stat.exists
+
+- name: Unpack the AWS CLI v2
+  ansible.builtin.unarchive:
+    src: /tmp/awscliv2.zip
+    dest: /tmp
+    remote_src: true
+  when: not jenkins_awscli.stat.exists
+
+- name: Install the AWS CLI v2
+  ansible.builtin.command:
+    cmd: /tmp/aws/install
+    creates: /usr/local/bin/aws
+
+# ---------- Trivy (pinned version, checksum checked) ----------
+
+- name: Create the Trivy folder for this version
+  ansible.builtin.file:
+    path: "/opt/trivy-{{ jenkins_trivy_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download Trivy and check its checksum
+  ansible.builtin.get_url:
+    url: "{{ jenkins_trivy_base_url }}/trivy_{{ jenkins_trivy_version }}_Linux-64bit.tar.gz"
+    dest: "/opt/trivy-{{ jenkins_trivy_version }}/trivy.tar.gz"
+    checksum: "sha256:{{ jenkins_trivy_base_url }}/trivy_{{ jenkins_trivy_version }}_checksums.txt"
+    mode: "0644"
+
+- name: Unpack Trivy
+  ansible.builtin.unarchive:
+    src: "/opt/trivy-{{ jenkins_trivy_version }}/trivy.tar.gz"
+    dest: "/opt/trivy-{{ jenkins_trivy_version }}"
+    remote_src: true
+    include:
+      - trivy
+    creates: "/opt/trivy-{{ jenkins_trivy_version }}/trivy"
+
+- name: Make this Trivy version the active one
+  ansible.builtin.file:
+    src: "/opt/trivy-{{ jenkins_trivy_version }}/trivy"
+    dest: /usr/local/bin/trivy
+    state: link
+
+# ---------- Ansible on the Jenkins server (for deploys) ----------
+
+- name: Install Ansible and boto3 in a virtual environment
+  ansible.builtin.pip:
+    name:
+      - ansible
+      - boto3
+    virtualenv: "{{ jenkins_ansible_venv }}"
+    virtualenv_command: python3 -m venv
+
+# ---------- SSH key Ansible uses to reach the app server ----------
+
+- name: Create the .ssh folder of the jenkins user
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}/.ssh"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: "0700"
+
+- name: Write the deploy key from SSM
+  ansible.builtin.copy:
+    dest: "{{ jenkins_deploy_key }}"
+    content: "{{ lookup('amazon.aws.ssm_parameter', jenkins_ssm_prefix ~ '/deploy_ssh_private_key', region=jenkins_aws_region) | trim }}\n"
+    owner: jenkins
+    group: jenkins
+    mode: "0600"
+  no_log: true

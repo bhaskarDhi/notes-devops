@@ -22,3 +22,10 @@ jenkins_ssm_prefix: /notes-devops/prod
 jenkins_github_owner: ""
 jenkins_github_repo: ""
 jenkins_github_user: ""
+
+jenkins_ecr_repository_url: "{{ lookup('amazon.aws.ssm_parameter', jenkins_ssm_prefix ~ '/ecr_repository_url', region=jenkins_aws_region) }}"
+
+jenkins_trivy_version: "0.75.0"
+jenkins_trivy_base_url: "https://github.com/aquasecurity/trivy/releases/download/v{{ jenkins_trivy_version }}"
+jenkins_ansible_venv: /opt/ansible
+jenkins_deploy_key: "{{ jenkins_home }}/.ssh/deploy_key"

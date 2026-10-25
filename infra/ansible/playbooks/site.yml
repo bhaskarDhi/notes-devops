@@ -16,3 +16,8 @@
   become: true
   roles:
     - jenkins
+    - role: ecr_login
+      vars:
+        ecr_login_users:
+          - name: jenkins
+            home: /var/lib/jenkins
