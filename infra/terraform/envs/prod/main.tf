@@ -56,6 +56,30 @@ resource "aws_ssm_parameter" "image_tag" {
   }
 }
 
+# ---------- Jenkins secrets (Ansible writes them into Jenkins) ----------
+
+resource "random_password" "jenkins_admin" {
+  length  = 24
+  special = false
+}
+
+resource "aws_ssm_parameter" "jenkins_admin_password" {
+  name  = "${local.ssm_prefix}/jenkins_admin_password"
+  type  = "SecureString"
+  value = random_password.jenkins_admin.result
+}
+
+resource "random_password" "github_webhook_secret" {
+  length  = 40
+  special = false
+}
+
+resource "aws_ssm_parameter" "github_webhook_secret" {
+  name  = "${local.ssm_prefix}/github_webhook_secret"
+  type  = "SecureString"
+  value = random_password.github_webhook_secret.result
+}
+
 # ---------- modules ----------
 
 module "network" {

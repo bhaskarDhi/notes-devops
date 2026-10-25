@@ -1,0 +1,174 @@
+- name: Check that the GitHub settings are set
+  ansible.builtin.assert:
+    that:
+      - jenkins_github_owner | length > 0
+      - jenkins_github_repo | length > 0
+      - jenkins_github_user | length > 0
+    fail_msg: "Set jenkins_github_owner, jenkins_github_repo and jenkins_github_user in group_vars/jenkins.yml"
+
+- name: Install Java and git
+  ansible.builtin.apt:
+    name:
+      - fontconfig
+      - "{{ jenkins_java_package }}"
+      - git
+    state: present
+
+- name: Add the official Jenkins LTS repository
+  ansible.builtin.deb822_repository:
+    name: jenkins
+    types: deb
+    uris: https://pkg.jenkins.io/debian-stable
+    suites: binary/
+    signed_by: https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+
+- name: Create the systemd override folder
+  ansible.builtin.file:
+    path: /etc/systemd/system/jenkins.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Jenkins service settings (no setup wizard, localhost only, JCasC)
+  ansible.builtin.template:
+    src: override.conf.j2
+    dest: /etc/systemd/system/jenkins.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart jenkins
+
+- name: Check if Jenkins is already installed
+  ansible.builtin.stat:
+    path: "{{ jenkins_war }}"
+  register: jenkins_war_file
+
+- name: Do not start services during the first install
+  ansible.builtin.copy:
+    dest: /usr/sbin/policy-rc.d
+    content: |
+      #!/bin/sh
+      exit 101
+    owner: root
+    group: root
+    mode: "0755"
+  when: not jenkins_war_file.stat.exists
+
+- name: Install Jenkins
+  ansible.builtin.apt:
+    name: jenkins
+    state: present
+    update_cache: true
+
+- name: Allow services to start again
+  ansible.builtin.file:
+    path: /usr/sbin/policy-rc.d
+    state: absent
+
+- name: Create the JCasC folders
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ jenkins_casc_dir }}", mode: "0750" }
+    - { path: "{{ jenkins_secrets_dir }}", mode: "0700" }
+
+- name: Check that the secrets exist in SSM Parameter Store
+  ansible.builtin.assert:
+    that: query('amazon.aws.ssm_parameter', jenkins_ssm_prefix ~ '/' ~ item, region=jenkins_aws_region, on_missing='skip') | select | list | length == 1
+    fail_msg: "Missing SSM parameter {{ jenkins_ssm_prefix }}/{{ item }}"
+    quiet: true
+  loop:
+    - jenkins_admin_password
+    - github_token
+    - github_webhook_secret
+
+- name: Write secrets from SSM Parameter Store
+  ansible.builtin.copy:
+    dest: "{{ jenkins_secrets_dir }}/{{ item.file }}"
+    content: "{{ lookup('amazon.aws.ssm_parameter', jenkins_ssm_prefix ~ '/' ~ item.param, region=jenkins_aws_region) }}"
+    owner: jenkins
+    group: jenkins
+    mode: "0600"
+  loop:
+    - { file: admin_password, param: jenkins_admin_password }
+    - { file: github_token, param: github_token }
+    - { file: github_webhook_secret, param: github_webhook_secret }
+  loop_control:
+    label: "{{ item.file }}"
+  no_log: true
+  notify: Restart jenkins
+
+- name: Download the plugin installation manager
+  ansible.builtin.get_url:
+    url: "{{ jenkins_plugin_manager_url }}"
+    dest: "{{ jenkins_plugin_manager_jar }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Copy the plugin list
+  ansible.builtin.copy:
+    src: plugins.txt
+    dest: "{{ jenkins_home }}/plugins.txt"
+    owner: jenkins
+    group: jenkins
+    mode: "0644"
+  register: jenkins_plugin_list
+
+- name: Check if the plugins are installed
+  ansible.builtin.stat:
+    path: "{{ jenkins_home }}/plugins/configuration-as-code.jpi"
+  register: jenkins_casc_plugin
+
+- name: Install the plugins (and their dependencies)
+  ansible.builtin.command:
+    cmd: >-
+      java -jar {{ jenkins_plugin_manager_jar }}
+      --war {{ jenkins_war }}
+      --plugin-download-directory {{ jenkins_home }}/plugins
+      --plugin-file {{ jenkins_home }}/plugins.txt
+  become: true
+  become_user: jenkins
+  when: jenkins_plugin_list is changed or not jenkins_casc_plugin.stat.exists
+  changed_when: true
+  notify: Restart jenkins
+
+- name: Write the Jenkins configuration (JCasC)
+  ansible.builtin.template:
+    src: jenkins.yaml.j2
+    dest: "{{ jenkins_casc_dir }}/jenkins.yaml"
+    owner: jenkins
+    group: jenkins
+    mode: "0640"
+  notify: Restart jenkins
+
+- name: Allow Jenkins to use Docker
+  ansible.builtin.user:
+    name: jenkins
+    groups: docker
+    append: true
+  notify: Restart jenkins
+
+- name: Apply pending restarts now
+  ansible.builtin.meta: flush_handlers
+
+- name: Start Jenkins now and at boot
+  ansible.builtin.systemd_service:
+    name: jenkins
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait until Jenkins answers
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8080/login
+    status_code: 200
+  register: jenkins_login_page
+  until: jenkins_login_page.status == 200
+  retries: 40
+  delay: 5
