@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Notes</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1><span>Notes</span> App</h1>
+    <small id="version">Node.js + PostgreSQL</small>
+  </header>
+  <main>
+    <form id="note-form">
+      <input id="title" name="title" placeholder="Title" maxlength="200" required>
+      <textarea id="content" name="content" placeholder="Write something..." maxlength="5000"></textarea>
+      <button type="submit">Add note</button>
+      <p id="error" class="error" hidden></p>
+    </form>
+    <ul id="notes"></ul>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

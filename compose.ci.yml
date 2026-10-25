@@ -1,0 +1,32 @@
+name: notes-ci
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: notes_test
+      POSTGRES_USER: notes
+      POSTGRES_PASSWORD: notes_test_pw
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notes -d notes_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  tests:
+    build:
+      context: ./app
+      target: test
+    environment:
+      NODE_ENV: test
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: notes_test
+      DB_USER: notes
+      DB_PASSWORD: notes_test_pw
+    depends_on:
+      db:
+        condition: service_healthy
