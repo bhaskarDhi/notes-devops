@@ -80,6 +80,19 @@ resource "aws_ssm_parameter" "github_webhook_secret" {
   value = random_password.github_webhook_secret.result
 }
 
+# ---------- Grafana admin password ----------
+
+resource "random_password" "grafana_admin" {
+  length  = 24
+  special = false
+}
+
+resource "aws_ssm_parameter" "grafana_admin_password" {
+  name  = "${local.ssm_prefix}/grafana_admin_password"
+  type  = "SecureString"
+  value = random_password.grafana_admin.result
+}
+
 # ---------- settings the pipeline needs ----------
 
 resource "aws_ssm_parameter" "ecr_repository_url" {
@@ -161,6 +174,7 @@ module "monitoring" {
   key_name           = aws_key_pair.admin.key_name
   instance_profile   = module.iam.monitoring_instance_profile
   user_data          = local.deploy_key_cloud_init
+  metadata_hop_limit = 2
 }
 
 module "database" {

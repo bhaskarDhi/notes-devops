@@ -8,8 +8,9 @@ resource "aws_instance" "this" {
   user_data              = var.user_data
 
   metadata_options {
-    http_tokens   = "required"
-    http_endpoint = "enabled"
+    http_tokens                 = "required"
+    http_endpoint               = "enabled"
+    http_put_response_hop_limit = var.metadata_hop_limit
   }
 
   root_block_device {

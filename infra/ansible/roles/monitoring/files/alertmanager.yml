@@ -1,0 +1,11 @@
+# No email or chat receivers (owner's choice): alerts are shown in the
+# Alertmanager UI and in Grafana. Add an email_configs block here to send them.
+route:
+  receiver: "ui-only"
+  group_by: ["alertname", "instance"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: "ui-only"

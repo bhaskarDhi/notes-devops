@@ -1,0 +1,10 @@
+- name: Install node_exporter (server metrics on port 9100)
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+
+- name: Start node_exporter now and at boot
+  ansible.builtin.systemd_service:
+    name: prometheus-node-exporter
+    state: started
+    enabled: true

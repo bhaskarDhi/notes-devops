@@ -1,0 +1,29 @@
+- name: Restart prometheus
+  ansible.builtin.command:
+    cmd: docker compose restart prometheus
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+- name: Restart alertmanager
+  ansible.builtin.command:
+    cmd: docker compose restart alertmanager
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+- name: Restart blackbox
+  ansible.builtin.command:
+    cmd: docker compose restart blackbox
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+- name: Restart loki
+  ansible.builtin.command:
+    cmd: docker compose restart loki
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+- name: Restart grafana
+  ansible.builtin.command:
+    cmd: docker compose restart grafana
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true

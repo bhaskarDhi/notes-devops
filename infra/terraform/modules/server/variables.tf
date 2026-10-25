@@ -45,3 +45,9 @@ variable "user_data" {
   type        = string
   default     = null
 }
+
+variable "metadata_hop_limit" {
+  description = "How many network hops the instance metadata (IAM credentials) may travel. 2 lets Docker containers on the server use the IAM role"
+  type        = number
+  default     = 1
+}

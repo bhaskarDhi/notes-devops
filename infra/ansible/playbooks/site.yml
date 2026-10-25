@@ -4,6 +4,7 @@
   roles:
     - common
     - docker
+    - node_exporter
 
 - name: HTTPS reverse proxy (app and Jenkins)
   hosts: app:jenkins
@@ -21,3 +22,21 @@
         ecr_login_users:
           - name: jenkins
             home: /var/lib/jenkins
+
+- name: Monitoring server (Prometheus, Alertmanager, Blackbox, Loki, Grafana)
+  hosts: monitoring
+  become: true
+  roles:
+    - monitoring
+
+- name: Container metrics on the app server
+  hosts: app
+  become: true
+  roles:
+    - cadvisor
+
+- name: Send logs to Loki (all servers)
+  hosts: all
+  become: true
+  roles:
+    - alloy

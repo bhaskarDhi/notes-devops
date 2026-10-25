@@ -1,0 +1,125 @@
+- name: Create the monitoring folders
+  ansible.builtin.file:
+    path: "{{ monitoring_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - ""
+    - prometheus
+    - alertmanager
+    - blackbox
+    - loki
+    - grafana
+    - grafana/provisioning
+    - grafana/provisioning/datasources
+    - grafana/provisioning/dashboards
+    - grafana/dashboards
+
+- name: Prometheus configuration (checked with promtool before it is installed)
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_dir }}/prometheus/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: >-
+      docker run --rm --user 0 --entrypoint promtool -v %s:/check.yml:ro
+      {{ monitoring_prometheus_image }} check config --syntax-only /check.yml
+  notify: Restart prometheus
+
+- name: Alert rules (checked with promtool before they are installed)
+  ansible.builtin.copy:
+    src: alerts.yml
+    dest: "{{ monitoring_dir }}/prometheus/alerts.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: >-
+      docker run --rm --user 0 --entrypoint promtool -v %s:/check.yml:ro
+      {{ monitoring_prometheus_image }} check rules /check.yml
+  notify: Restart prometheus
+
+- name: Alertmanager, Blackbox and Loki configuration
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ monitoring_dir }}/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: alertmanager.yml, dest: alertmanager/alertmanager.yml, service: alertmanager }
+    - { src: blackbox.yml, dest: blackbox/blackbox.yml, service: blackbox }
+    - { src: loki.yml, dest: loki/loki.yml, service: loki }
+  loop_control:
+    label: "{{ item.dest }}"
+  notify: "Restart {{ item.service }}"
+
+- name: Grafana data sources
+  ansible.builtin.template:
+    src: datasources.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/datasources.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart grafana
+
+- name: Grafana dashboard provider
+  ansible.builtin.copy:
+    src: dashboards.yml
+    dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/dashboards.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart grafana
+
+- name: Grafana dashboards (JSON)
+  ansible.builtin.copy:
+    src: dashboards/
+    dest: "{{ monitoring_dir }}/grafana/dashboards/"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Grafana admin password from SSM
+  ansible.builtin.copy:
+    dest: "{{ monitoring_dir }}/grafana/admin_password"
+    content: "{{ lookup('amazon.aws.ssm_parameter', monitoring_ssm_prefix ~ '/grafana_admin_password', region=monitoring_aws_region) }}"
+    owner: "472"
+    group: root
+    mode: "0400"
+  no_log: true
+  notify: Restart grafana
+
+- name: Monitoring compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ monitoring_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start the monitoring stack
+  ansible.builtin.command:
+    cmd: docker compose up -d --remove-orphans
+    chdir: "{{ monitoring_dir }}"
+  register: monitoring_up
+  changed_when: "'Started' in monitoring_up.stderr or 'Recreated' in monitoring_up.stderr"
+
+- name: Apply pending restarts now
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait until each service is ready
+  ansible.builtin.uri:
+    url: "{{ item }}"
+    status_code: 200
+  register: monitoring_ready
+  until: monitoring_ready.status == 200
+  retries: 30
+  delay: 5
+  loop:
+    - http://127.0.0.1:9090/-/ready
+    - http://127.0.0.1:9093/-/ready
+    - http://127.0.0.1:3100/ready
+    - http://127.0.0.1:3000/api/health
