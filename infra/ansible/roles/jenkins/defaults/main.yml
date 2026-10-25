@@ -1,0 +1,24 @@
+jenkins_home: /var/lib/jenkins
+jenkins_casc_dir: "{{ jenkins_home }}/casc"
+jenkins_secrets_dir: "{{ jenkins_home }}/casc-secrets"
+jenkins_war: /usr/share/java/jenkins.war
+
+jenkins_java_package: openjdk-21-jre-headless
+jenkins_heap: 1g
+jenkins_executors: 2
+
+jenkins_url: "https://{{ caddy_site }}/"
+jenkins_admin_user: admin
+
+jenkins_plugin_manager_version: "2.15.0"
+jenkins_plugin_manager_jar: /opt/jenkins-plugin-manager.jar
+jenkins_plugin_manager_url: >-
+  https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/{{ jenkins_plugin_manager_version
+  }}/jenkins-plugin-manager-{{ jenkins_plugin_manager_version }}.jar
+
+jenkins_aws_region: ap-south-1
+jenkins_ssm_prefix: /notes-devops/prod
+
+jenkins_github_owner: ""
+jenkins_github_repo: ""
+jenkins_github_user: ""

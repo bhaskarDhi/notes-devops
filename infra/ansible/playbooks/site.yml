@@ -10,3 +10,9 @@
   become: true
   roles:
     - caddy
+
+- name: Jenkins (installed and configured as code)
+  hosts: jenkins
+  become: true
+  roles:
+    - jenkins

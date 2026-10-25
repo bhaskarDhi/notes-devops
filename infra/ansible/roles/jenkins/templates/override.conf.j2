@@ -1,0 +1,6 @@
+# Managed by Ansible
+[Service]
+Environment="JAVA_OPTS=-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false -Xmx{{ jenkins_heap }}"
+Environment="JENKINS_LISTEN_ADDRESS=127.0.0.1"
+Environment="CASC_JENKINS_CONFIG={{ jenkins_casc_dir }}"
+Environment="SECRETS={{ jenkins_secrets_dir }}"

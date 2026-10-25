@@ -1,0 +1,84 @@
+# Managed by Ansible (Jenkins Configuration as Code).
+# Changes made in the Jenkins web UI are overwritten at the next restart.
+# ${name} values are read from files in {{ jenkins_secrets_dir }}.
+
+jenkins:
+  systemMessage: "notes-devops CI - configured as code. Do not change settings in the UI."
+  numExecutors: {{ jenkins_executors }}
+  mode: NORMAL
+  slaveAgentPort: -1
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "{{ jenkins_admin_user }}"
+          password: "${admin_password}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+security:
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: false
+
+unclassified:
+  location:
+    url: "{{ jenkins_url }}"
+  gitHubPluginConfig:
+    hookSecretConfigs:
+      - credentialsId: "github-webhook-secret"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: "github-token"
+              username: "{{ jenkins_github_user }}"
+              password: "${github_token}"
+              description: "GitHub fine-grained token: read the repo, set commit status"
+          - string:
+              scope: GLOBAL
+              id: "github-webhook-secret"
+              secret: "${github_webhook_secret}"
+              description: "Checks that webhooks really come from GitHub"
+
+jobs:
+  - script: |
+      multibranchPipelineJob('{{ jenkins_github_repo }}') {
+        displayName('{{ jenkins_github_repo }}')
+        description('Every branch and pull request of {{ jenkins_github_owner }}/{{ jenkins_github_repo }}')
+        branchSources {
+          branchSource {
+            source {
+              github {
+                id('{{ jenkins_github_repo }}')
+                repoOwner('{{ jenkins_github_owner }}')
+                repository('{{ jenkins_github_repo }}')
+                repositoryUrl('https://github.com/{{ jenkins_github_owner }}/{{ jenkins_github_repo }}')
+                configuredByUrl(true)
+                credentialsId('github-token')
+                traits {
+                  gitHubBranchDiscovery {
+                    strategyId(1)
+                  }
+                  gitHubPullRequestDiscovery {
+                    strategyId(1)
+                  }
+                }
+              }
+            }
+          }
+        }
+        orphanedItemStrategy {
+          discardOldItems {
+            numToKeep(10)
+          }
+        }
+        triggers {
+          periodicFolderTrigger {
+            interval('1d')
+          }
+        }
+      }

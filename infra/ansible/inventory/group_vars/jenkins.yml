@@ -1,2 +1,6 @@
 caddy_site: "jenkins.{{ sslip_domain }}"
 caddy_upstream: "127.0.0.1:8080"
+
+jenkins_github_owner: bhaskarDhi
+jenkins_github_repo: notes-devops
+jenkins_github_user: bhaskarDhi
