@@ -1,0 +1,12 @@
+common_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - unzip
+  - jq
+  - htop
+  - unattended-upgrades
+  - python3-debian
+
+common_swap_size_mb: 2048
+common_swap_file: /swapfile

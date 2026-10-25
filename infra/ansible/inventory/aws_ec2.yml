@@ -1,0 +1,15 @@
+plugin: amazon.aws.aws_ec2
+regions:
+  - ap-south-1
+filters:
+  instance-state-name: running
+  tag:Project: notes-devops
+  tag:Environment: prod
+hostnames:
+  - tag:Name
+groups:
+  app: ec2_tags.Role == 'app'
+  jenkins: ec2_tags.Role == 'jenkins'
+  monitoring: ec2_tags.Role == 'monitoring'
+compose:
+  ansible_host: private_ip_address

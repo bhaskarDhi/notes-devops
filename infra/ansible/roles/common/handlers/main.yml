@@ -1,0 +1,4 @@
+- name: Enable swap
+  ansible.builtin.shell:
+    cmd: "mkswap {{ common_swap_file }} && swapon {{ common_swap_file }}"
+  changed_when: true

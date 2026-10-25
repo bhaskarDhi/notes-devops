@@ -1,0 +1,12 @@
+- name: Base setup (all servers)
+  hosts: all
+  become: true
+  roles:
+    - common
+    - docker
+
+- name: HTTPS reverse proxy (app and Jenkins)
+  hosts: app:jenkins
+  become: true
+  roles:
+    - caddy

@@ -1,0 +1,6 @@
+# Managed by Ansible - changes here are overwritten
+
+{{ caddy_site }} {
+	encode zstd gzip
+	reverse_proxy {{ caddy_upstream }}
+}

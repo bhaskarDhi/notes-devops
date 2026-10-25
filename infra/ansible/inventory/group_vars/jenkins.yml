@@ -1,0 +1,2 @@
+caddy_site: "jenkins.{{ sslip_domain }}"
+caddy_upstream: "127.0.0.1:8080"
