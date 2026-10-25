@@ -1,0 +1,12 @@
+# Step 2 of the bootstrap: after the first "terraform apply",
+# copy this file to backend.tf, put in the bucket name from the output,
+# then run:  terraform init -migrate-state
+terraform {
+  backend "s3" {
+    bucket       = "notes-devops-tfstate-ACCOUNT_ID"
+    key          = "bootstrap/terraform.tfstate"
+    region       = "ap-south-1"
+    encrypt      = true
+    use_lockfile = true
+  }
+}
