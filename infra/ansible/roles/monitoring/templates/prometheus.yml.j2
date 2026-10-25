@@ -1,0 +1,86 @@
+# Managed by Ansible - what Prometheus collects, and from where
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: {{ monitoring_project_tag }}
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Server metrics from every server (found through the AWS API by tag)
+  - job_name: node
+    ec2_sd_configs:
+      - region: {{ monitoring_aws_region }}
+        port: 9100
+        filters:
+          - name: tag:Project
+            values: ["{{ monitoring_project_tag }}"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_tag_Name]
+        target_label: instance
+      - source_labels: [__meta_ec2_tag_Role]
+        target_label: role
+
+  # Container metrics (cAdvisor) on the app server
+  - job_name: cadvisor
+    ec2_sd_configs:
+      - region: {{ monitoring_aws_region }}
+        port: 8081
+        filters:
+          - name: tag:Project
+            values: ["{{ monitoring_project_tag }}"]
+          - name: tag:Role
+            values: ["app"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_tag_Name]
+        target_label: instance
+
+  # The app's own metrics (requests, errors, response time)
+  - job_name: notes-app
+    metrics_path: /metrics
+    ec2_sd_configs:
+      - region: {{ monitoring_aws_region }}
+        port: 3000
+        filters:
+          - name: tag:Project
+            values: ["{{ monitoring_project_tag }}"]
+          - name: tag:Role
+            values: ["app"]
+          - name: instance-state-name
+            values: ["running"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_tag_Name]
+        target_label: instance
+
+  # Is the website up from outside? (HTTPS through Caddy)
+  - job_name: blackbox-https
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+{% for target in monitoring_probe_targets %}
+          - "{{ target }}"
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115

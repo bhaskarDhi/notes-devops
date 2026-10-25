@@ -1,0 +1,22 @@
+- name: Create the cAdvisor folder
+  ansible.builtin.file:
+    path: "{{ cadvisor_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the cAdvisor compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ cadvisor_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start cAdvisor
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ cadvisor_dir }}"
+  register: cadvisor_up
+  changed_when: "'Started' in cadvisor_up.stderr or 'Recreated' in cadvisor_up.stderr"

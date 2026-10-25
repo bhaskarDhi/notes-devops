@@ -1,0 +1,17 @@
+monitoring_dir: /opt/monitoring
+monitoring_aws_region: ap-south-1
+monitoring_ssm_prefix: /notes-devops/prod
+monitoring_project_tag: notes-devops
+
+monitoring_prometheus_image: prom/prometheus:v3.15.1
+monitoring_alertmanager_image: prom/alertmanager:v0.34.1
+monitoring_blackbox_image: prom/blackbox-exporter:v0.29.1
+monitoring_loki_image: grafana/loki:3.7.9
+monitoring_grafana_image: grafana/grafana:13.2.4
+
+monitoring_retention: 15d
+monitoring_db_identifier: notes-devops-prod-db
+
+monitoring_probe_targets:
+  - "https://{{ hostvars[groups['app'][0]]['caddy_site'] }}/ready"
+  - "https://{{ hostvars[groups['jenkins'][0]]['caddy_site'] }}/login"

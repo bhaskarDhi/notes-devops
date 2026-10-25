@@ -1,0 +1,56 @@
+// Managed by Ansible - Grafana Alloy sends logs from this server to Loki
+
+// ---------- Docker container logs ----------
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  labels        = { "source" = "docker" }
+  relabel_rules = discovery.relabel.containers.rules
+  forward_to    = [loki.write.monitoring.receiver]
+}
+
+// ---------- System logs (journald: ssh, jenkins, caddy, docker, ...) ----------
+
+loki.relabel "journal" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+}
+
+loki.source.journal "system" {
+  max_age       = "12h"
+  labels        = { "source" = "journal" }
+  relabel_rules = loki.relabel.journal.rules
+  forward_to    = [loki.write.monitoring.receiver]
+}
+
+// ---------- Where to send: Loki on the monitoring server ----------
+
+loki.write "monitoring" {
+  endpoint {
+    url = "{{ alloy_loki_url }}"
+  }
+
+  external_labels = {
+    "host" = "{{ alloy_host_label }}",
+    "role" = "{{ alloy_role_label }}",
+  }
+}

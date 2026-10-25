@@ -1,0 +1,2 @@
+cadvisor_image: gcr.io/cadvisor/cadvisor:v0.55.1
+cadvisor_dir: /opt/cadvisor
