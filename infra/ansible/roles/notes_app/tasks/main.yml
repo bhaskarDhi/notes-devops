@@ -1,0 +1,150 @@
+- name: Check the image tag (a full git commit SHA)
+  ansible.builtin.assert:
+    that: notes_app_image_tag is match('^[0-9a-f]{40}$')
+    fail_msg: "Run with -e image_tag=<40-character git commit SHA>, got '{{ notes_app_image_tag }}'"
+    quiet: true
+
+- name: Read the settings from SSM Parameter Store
+  ansible.builtin.set_fact:
+    notes_app_settings: "{{ dict(notes_app_names | zip(notes_app_values)) }}"
+  vars:
+    notes_app_names: [db_host, db_port, db_name, db_user, db_password, ecr_repository_url, image_tag]
+    notes_app_paths: "{{ notes_app_names | map('regex_replace', '^', notes_app_ssm_prefix ~ '/') | list }}"
+    notes_app_values: "{{ query('amazon.aws.ssm_parameter', *notes_app_paths, region=notes_app_aws_region) }}"
+  no_log: true
+
+- name: Remember the version that is running now
+  ansible.builtin.set_fact:
+    notes_app_previous_tag: "{{ notes_app_settings.image_tag }}"
+
+- name: Show what is deployed
+  ansible.builtin.debug:
+    msg: "Deploying {{ notes_app_image_tag[:12] }} (running now: {{ notes_app_previous_tag[:12] }})"
+
+- name: Create the app folder
+  ansible.builtin.file:
+    path: "{{ notes_app_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Download the RDS certificate bundle (to verify the database's TLS certificate)
+  ansible.builtin.get_url:
+    url: "{{ notes_app_rds_ca_url }}"
+    dest: "{{ notes_app_dir }}/rds-ca.pem"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Write the app settings (.env)
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ notes_app_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Deploy the new version (rolls back by itself if it fails)
+  block:
+    - name: Write compose.yml with the new image
+      ansible.builtin.template:
+        src: compose.yml.j2
+        dest: "{{ notes_app_dir }}/compose.yml"
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        notes_app_tag: "{{ notes_app_image_tag }}"
+
+    - name: Pull the new image from ECR
+      ansible.builtin.command:
+        cmd: docker compose pull
+        chdir: "{{ notes_app_dir }}"
+      changed_when: true
+
+    - name: Run database migrations with the new image
+      ansible.builtin.command:
+        cmd: docker compose run --rm app npm run migrate
+        chdir: "{{ notes_app_dir }}"
+      register: notes_app_migrate
+      changed_when: "'Already up to date' not in notes_app_migrate.stdout"
+
+    - name: Start the new version
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans
+        chdir: "{{ notes_app_dir }}"
+      changed_when: true
+
+    - name: Wait until the app is ready (database connected)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/ready
+        status_code: 200
+      register: notes_app_ready
+      until: notes_app_ready.status == 200
+      retries: "{{ notes_app_ready_retries }}"
+      delay: "{{ notes_app_ready_delay }}"
+
+    - name: Smoke test from outside - HTTPS shows the new version
+      ansible.builtin.uri:
+        url: "{{ notes_app_public_url }}/health"
+        return_content: true
+      register: notes_app_health
+      until: notes_app_health.json is defined and notes_app_health.json.version == notes_app_image_tag
+      retries: 5
+      delay: 3
+      delegate_to: localhost
+      become: false
+
+    - name: Smoke test from outside - the notes API answers
+      ansible.builtin.uri:
+        url: "{{ notes_app_public_url }}/api/notes"
+        status_code: 200
+      delegate_to: localhost
+      become: false
+
+  rescue:
+    - name: Deploy failed
+      ansible.builtin.debug:
+        msg: "Deploy of {{ notes_app_image_tag[:12] }} failed at: {{ ansible_failed_task.name }}"
+
+    - name: Roll back to the previous version
+      when: notes_app_previous_tag is match('^[0-9a-f]{40}$')
+      block:
+        - name: Write compose.yml with the previous image
+          ansible.builtin.template:
+            src: compose.yml.j2
+            dest: "{{ notes_app_dir }}/compose.yml"
+            owner: root
+            group: root
+            mode: "0644"
+          vars:
+            notes_app_tag: "{{ notes_app_previous_tag }}"
+
+        - name: Start the previous version
+          ansible.builtin.command:
+            cmd: docker compose up -d --remove-orphans
+            chdir: "{{ notes_app_dir }}"
+          changed_when: true
+
+        - name: Wait until the previous version is ready
+          ansible.builtin.uri:
+            url: http://127.0.0.1:3000/ready
+            status_code: 200
+          register: notes_app_rollback_ready
+          until: notes_app_rollback_ready.status == 200
+          retries: "{{ notes_app_ready_retries }}"
+          delay: "{{ notes_app_ready_delay }}"
+
+    - name: Stop with an error (the pipeline must turn red)
+      ansible.builtin.fail:
+        msg: >-
+          Deploy of {{ notes_app_image_tag[:12] }} failed.
+          {{ 'Rolled back to ' ~ notes_app_previous_tag[:12] if notes_app_previous_tag is match('^[0-9a-f]{40}$')
+             else 'No previous version to roll back to (first deploy).' }}
+
+- name: Remove old images (keep the current one and the previous one)
+  ansible.builtin.command:
+    cmd: docker image prune -a -f --filter "until=168h"
+  changed_when: false

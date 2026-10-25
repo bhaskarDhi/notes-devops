@@ -7,6 +7,23 @@ jenkins:
   numExecutors: {{ jenkins_executors }}
   mode: NORMAL
   slaveAgentPort: -1
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "AWS_REGION"
+            value: "{{ jenkins_aws_region }}"
+          - key: "AWS_DEFAULT_REGION"
+            value: "{{ jenkins_aws_region }}"
+          - key: "SSM_PREFIX"
+            value: "{{ jenkins_ssm_prefix }}"
+          - key: "ECR_REPOSITORY_URL"
+            value: "{{ jenkins_ecr_repository_url }}"
+          - key: "ANSIBLE_PRIVATE_KEY_FILE"
+            value: "{{ jenkins_deploy_key }}"
+          - key: "ANSIBLE_PLAYBOOK"
+            value: "{{ jenkins_ansible_venv }}/bin/ansible-playbook"
+          - key: "ANSIBLE_FORCE_COLOR"
+            value: "true"
   securityRealm:
     local:
       allowsSignup: false

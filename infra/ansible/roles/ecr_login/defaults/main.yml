@@ -1,0 +1,8 @@
+ecr_login_ssm_prefix: /notes-devops/prod
+ecr_login_aws_region: ap-south-1
+ecr_login_repository_url: "{{ lookup('amazon.aws.ssm_parameter', ecr_login_ssm_prefix ~ '/ecr_repository_url', region=ecr_login_aws_region) }}"
+ecr_login_registry: "{{ ecr_login_repository_url.split('/')[0] }}"
+
+ecr_login_users:
+  - name: root
+    home: /root

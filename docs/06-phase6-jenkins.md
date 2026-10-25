@@ -727,11 +727,34 @@ gh pr checks 6 --watch
 
 ### 6.9.7 Require the check
 
-GitHub: **Settings → Rules → Rulesets → protect-main → ☑ Require status checks to pass → Add checks → `continuous-integration/jenkins/pr-merge` → Save changes**.
+Done with the GitHub API (the website way: **Settings → Rules → Rulesets → protect-main → ☑ Require status checks to pass → Add checks → `continuous-integration/jenkins/pr-merge` → Save changes**):
 
 ```bash
-gh api repos/bhaskarDhi/notes-devops/rulesets/$(gh api repos/bhaskarDhi/notes-devops/rulesets --jq '.[0].id') --jq '.rules[].type'
-gh pr merge 6 --merge --delete-branch
+RID=$(gh api repos/bhaskarDhi/notes-devops/rulesets --jq '.[] | select(.name=="protect-main") | .id')
+gh api repos/bhaskarDhi/notes-devops/rulesets/$RID --jq '.rules[].type'
+
+gh api repos/bhaskarDhi/notes-devops/rulesets/$RID --jq '{name, target, enforcement, conditions, bypass_actors: (.bypass_actors // []), rules: (.rules + [{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":false,"do_not_enforce_on_create":false,"required_status_checks":[{"context":"continuous-integration/jenkins/pr-merge"}]}}])}' > /tmp/ruleset-new.json
+gh api -X PUT repos/bhaskarDhi/notes-devops/rulesets/$RID --input /tmp/ruleset-new.json --jq '.rules[].type'
+```
+
+| Part | Meaning |
+|---|---|
+| `RID=$(... select(.name=="protect-main") | .id)` | find the ruleset's ID by its name |
+| first `--jq '{name, ..., rules: (.rules + [ ... ])}'` | download the ruleset and build a new version: everything the same, plus one more rule |
+| `strict_required_status_checks_policy: false` | the PR branch doesn't have to contain the newest `main` (we already test PRs merged with main) |
+| `do_not_enforce_on_create: false` | the rule also applies when a branch is created |
+| `-X PUT ... --input file` | upload the new version (PUT = replace) |
+
+Test that it really blocks:
+
+```bash
+git checkout -b test/required-check
+git commit --allow-empty -m "Test required Jenkins check"
+git push -u origin test/required-check
+gh pr create --base main --head test/required-check --fill
+gh pr merge test/required-check --merge --delete-branch      # refused
+gh pr checks test/required-check --watch                     # wait for Jenkins ✓
+gh pr merge test/required-check --merge --delete-branch      # now allowed
 git checkout main && git pull
 ```
 
@@ -761,6 +784,7 @@ gh api -X DELETE repos/bhaskarDhi/notes-devops/hooks/OLD_HOOK_ID
 | PR #6 | `✓ continuous-integration/jenkins/pr-merge — This commit looks good` |
 | Ruleset | `deletion`, `non_fast_forward`, `pull_request`, `required_status_checks` |
 | PR #6 merged | `main` now has the Jenkinsfile; Jenkins builds `main` too (`continuous-integration/jenkins/branch`) |
+| PR #8 (test) merged before Jenkins finished | `X ... is not mergeable: the base branch policy prohibits the merge` ✅ |
 
 ---
 
@@ -792,6 +816,11 @@ gh api -X DELETE repos/bhaskarDhi/notes-devops/hooks/OLD_HOOK_ID
 ### First scan didn't see the new branch
 - **Cause:** the scan ran when Jenkins started (before the push), and the push event was received while the token was broken.
 - **Fix:** after the correct token: a new push (or **Scan Repository Now**) → the branch and PR-6 appeared and were built.
+
+### PR #7 merged immediately, without waiting for Jenkins
+- **Cause:** the "Require status checks" setting had not been saved in the ruleset (it still had only `deletion`, `non_fast_forward`, `pull_request`).
+- **Fix:** add the rule with the GitHub API (6.9.7) and **test** it: PR #8 was refused until Jenkins reported ✓.
+- **Lesson (again):** a protection is only real after a test shows it blocks.
 
 ### The updated JCasC file didn't reach the Mac (`nothing to commit`)
 - **Cause:** a file-sync glitch on my side: the old version was written again.

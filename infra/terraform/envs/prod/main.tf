@@ -80,6 +80,20 @@ resource "aws_ssm_parameter" "github_webhook_secret" {
   value = random_password.github_webhook_secret.result
 }
 
+# ---------- settings the pipeline needs ----------
+
+resource "aws_ssm_parameter" "ecr_repository_url" {
+  name  = "${local.ssm_prefix}/ecr_repository_url"
+  type  = "String"
+  value = data.aws_ecr_repository.app.repository_url
+}
+
+resource "aws_ssm_parameter" "alert_email" {
+  name  = "${local.ssm_prefix}/alert_email"
+  type  = "String"
+  value = var.alert_email
+}
+
 # ---------- modules ----------
 
 module "network" {

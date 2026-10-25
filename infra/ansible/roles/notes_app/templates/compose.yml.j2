@@ -1,0 +1,12 @@
+# Managed by Ansible - deployed version: {{ notes_app_tag }}
+name: notes
+
+services:
+  app:
+    image: "{{ notes_app_settings.ecr_repository_url }}:{{ notes_app_tag }}"
+    env_file: .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./rds-ca.pem:/certs/rds-ca.pem:ro
+    restart: unless-stopped

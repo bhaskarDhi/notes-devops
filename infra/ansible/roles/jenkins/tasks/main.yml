@@ -154,6 +154,9 @@
     append: true
   notify: Restart jenkins
 
+- name: Include the pipeline tools (AWS CLI, Trivy, Ansible, deploy key)
+  ansible.builtin.include_tasks: tools.yml
+
 - name: Apply pending restarts now
   ansible.builtin.meta: flush_handlers
 
